@@ -30,8 +30,12 @@ provider "aws" {
 resource "random_pet" "sg" {}
 
 resource "aws_security_group" "web-sg" {
+<<<<<<< HEAD
   # Corrected the string interpolation syntax
   name = "${random_pet.sg.id}-sg"  # String interpolation for concatenation
+=======
+  name = "${random_pet.sg.id}-sg"
+>>>>>>> a9c4fb9 (TF change)
 
   ingress {
     from_port   = 8080
@@ -55,6 +59,7 @@ resource "aws_instance" "web" {
   vpc_security_group_ids  = [aws_security_group.web-sg.id]
 
   user_data = <<-EOF
+<<<<<<< HEAD
     #!/bin/bash
     apt-get update
     apt-get install -y apache2
@@ -66,4 +71,18 @@ resource "aws_instance" "web" {
 
 output "web-address" {
   value = "${aws_instance.web.public_dns}:8080"  # Corrected string interpolation for output
+=======
+              #!/bin/bash
+              apt-get update
+              apt-get install -y apache2
+              sed -i -e 's/80/8080/' /etc/apache2/ports.conf
+              echo "Hello World" > /var/www/html/index.html
+              systemctl restart apache2
+              EOF
 }
+
+output "web-address" {
+  value = "${aws_instance.web.public_dns}:8080"
+>>>>>>> a9c4fb9 (TF change)
+}
+
