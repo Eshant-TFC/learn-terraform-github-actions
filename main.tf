@@ -30,7 +30,8 @@ provider "aws" {
 resource "random_pet" "sg" {}
 
 resource "aws_security_group" "web-sg" {
-  name = random_pet.sg.id- sg
+  # Corrected the string interpolation syntax
+  name = "${random_pet.sg.id}-sg"  # String interpolation for concatenation
 
   ingress {
     from_port   = 8080
@@ -64,5 +65,5 @@ resource "aws_instance" "web" {
 }
 
 output "web-address" {
-  value = aws_instance.web.public_dns:8080
+  value = "${aws_instance.web.public_dns}:8080"  # Corrected string interpolation for output
 }
