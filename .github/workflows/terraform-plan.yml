@@ -22,7 +22,7 @@ jobs:
 
     steps:
     # Step 1: Checkout code
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v3
 
     # Step 2: Upload configuration to Terraform Cloud
@@ -77,10 +77,10 @@ jobs:
             repo: context.repo.repo,
             issue_number: context.issue.number,
           });
-
-          // Find the comment by the bot
+          
+          // Find the existing bot comment
           const botComment = comments.find(comment => {
-            return comment.user.type === 'Bot' && comment.body.includes('HCP Terraform Plan Output')
+            return comment.user.type === 'Bot' && comment.body.includes('HCP Terraform Plan Output');
           });
 
           // Prepare the Terraform plan output comment with the full plan text
