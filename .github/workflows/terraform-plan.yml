@@ -21,11 +21,9 @@ jobs:
       pull-requests: write
 
     steps:
-    # Step 1: Checkout code
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step 2: Upload configuration to Terraform Cloud
     - name: Upload Configuration
       uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
       id: plan-upload
@@ -34,7 +32,6 @@ jobs:
         directory: ${{ env.CONFIG_DIRECTORY }}
         speculative: true  # Run a speculative plan
 
-    # Step 3: Create Terraform Plan Run in Terraform Cloud
     - name: Create Plan Run
       uses: hashicorp/tfc-workflows-github/actions/create-run@v1.0.0
       id: plan-run
@@ -43,41 +40,56 @@ jobs:
         configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
         plan_only: true  # Only generate the plan, don't apply
 
-    # Step 4: Retrieve the Terraform Plan Output from Terraform Cloud
-    - name: Get Plan Output
-      uses: hashicorp/tfc-workflows-github/actions/plan-output@v1.0.0
-      id: plan-output
-      with:
-        plan: ${{ fromJSON(steps.plan-run.outputs.payload).data.relationships.plan.data.id }}
+    # Fetch Full Plan Output
+    - name: Fetch Full Terraform Plan Output
+      id: fetch-plan-output
+      run: |
+        # Fetch the Run ID from the previous step
+        RUN_ID=${{ fromJSON(steps.plan-run.outputs.payload).data.id }}
 
-    # Step 5: Update the Pull Request with the Terraform Plan Output
-    - name: Update PR with Terraform Plan Output
+        # Use curl to get the plan details from Terraform Cloud's API
+        curl --silent --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+             --header "Content-Type: application/vnd.api+json" \
+             --request GET \
+             --url "https://app.terraform.io/api/v2/runs/$RUN_ID/plan" \
+             --output plan_output.json
+        
+        # Extract the plan text from the response
+        PLAN_OUTPUT=$(cat plan_output.json | jq -r '.data.attributes.plan.text')
+        
+        # Save it to a file so we can use it in the next step
+        echo "$PLAN_OUTPUT" > terraform_plan_output.txt
+
+    # Step to add comment with the full plan
+    - name: Update PR with Full Terraform Plan Output
       uses: actions/github-script@v6
       id: plan-comment
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          // 1. Retrieve existing bot comments for the PR
+          const fs = require('fs');
+          const planOutput = fs.readFileSync('terraform_plan_output.txt', 'utf8');
+          
+          // Retrieve existing bot comments for the PR
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,
             repo: context.repo.repo,
             issue_number: context.issue.number,
           });
-          
-          // 2. Find the existing bot comment
+
+          // Find the previous bot comment
           const botComment = comments.find(comment => {
             return comment.user.type === 'Bot' && comment.body.includes('HCP Terraform Plan Output');
           });
-          
-          // 3. Prepare the output message
+
+          // Prepare the full Terraform plan output comment
           const output = `#### HCP Terraform Plan Output
           \`\`\`
-          Plan: ${{ steps.plan-output.outputs.add }} to add, ${{ steps.plan-output.outputs.change }} to change, ${{ steps.plan-output.outputs.destroy }} to destroy.
+          ${planOutput}
           \`\`\`
-          [HCP Terraform Plan](${{ steps.plan-run.outputs.run_link }})
           `;
 
-          // 4. If there's an existing bot comment, delete it
+          // If there's an existing bot comment, delete it
           if (botComment) {
             await github.rest.issues.deleteComment({
               owner: context.repo.owner,
@@ -86,7 +98,7 @@ jobs:
             });
           }
 
-          // 5. Create a new comment with the Terraform plan output
+          // Create a new comment with the full Terraform plan output
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
