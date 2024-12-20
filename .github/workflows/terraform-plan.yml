@@ -40,6 +40,16 @@ jobs:
         configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
         plan_only: true  # Only generate the plan, don't apply
 
+
+    # Step 4: Get the Run ID and Plan Output from Terraform Cloud
+    - name: Get Full Plan Output
+      id: get-full-plan
+      run: |
+        # Fetch the run ID from the previous step
+        RUN_ID=${{ fromJSON(steps.plan-run.outputs.payload).data.id }}
+        
+        # Fetch the plan output from Terraform Cloud's API
+
     # Fetch Full Plan Output
     - name: Fetch Full Terraform Plan Output
       id: fetch-plan-output
@@ -48,12 +58,20 @@ jobs:
         RUN_ID=${{ fromJSON(steps.plan-run.outputs.payload).data.id }}
 
         # Use curl to get the plan details from Terraform Cloud's API
+
         curl --silent --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
              --header "Content-Type: application/vnd.api+json" \
              --request GET \
              --url "https://app.terraform.io/api/v2/runs/$RUN_ID/plan" \
              --output plan_output.json
         
+
+        # Parse the plan output as text
+        PLAN_OUTPUT=$(cat plan_output.json | jq -r '.data.attributes.plan.text')
+        echo "$PLAN_OUTPUT" > terraform_plan_output.txt
+
+    # Step 5: Update the Pull Request with Full Terraform Plan Output
+
         # Extract the plan text from the response
         PLAN_OUTPUT=$(cat plan_output.json | jq -r '.data.attributes.plan.text')
         
@@ -61,6 +79,7 @@ jobs:
         echo "$PLAN_OUTPUT" > terraform_plan_output.txt
 
     # Step to add comment with the full plan
+
     - name: Update PR with Full Terraform Plan Output
       uses: actions/github-script@v6
       id: plan-comment
@@ -77,12 +96,20 @@ jobs:
             issue_number: context.issue.number,
           });
 
+          
+          // Find the existing bot comment
+
           // Find the previous bot comment
+
           const botComment = comments.find(comment => {
             return comment.user.type === 'Bot' && comment.body.includes('HCP Terraform Plan Output');
           });
 
+
+          // Prepare the Terraform plan output comment with the full plan text
+
           // Prepare the full Terraform plan output comment
+
           const output = `#### HCP Terraform Plan Output
           \`\`\`
           ${planOutput}
