@@ -43,21 +43,25 @@ jobs:
         configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
         plan_only: true  # Only generate the plan, don't apply
 
-    # Step 4: Retrieve Terraform Plan Output from Terraform Cloud
+    # Step 4: Get the Run ID and Plan Output from Terraform Cloud
     - name: Get Full Plan Output
       id: get-full-plan
       run: |
-        curl --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+        # Fetch the run ID from the previous step
+        RUN_ID=${{ fromJSON(steps.plan-run.outputs.payload).data.id }}
+        
+        # Fetch the plan output from Terraform Cloud's API
+        curl --silent --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
              --header "Content-Type: application/vnd.api+json" \
              --request GET \
-             --url "https://app.terraform.io/api/v2/runs/${{ fromJSON(steps.plan-run.outputs.payload).data.id }}/plan" \
+             --url "https://app.terraform.io/api/v2/runs/$RUN_ID/plan" \
              --output plan_output.json
         
-        # Parse and store the plan output in a file to use in the next step
+        # Parse the plan output as text
         PLAN_OUTPUT=$(cat plan_output.json | jq -r '.data.attributes.plan.text')
         echo "$PLAN_OUTPUT" > terraform_plan_output.txt
 
-    # Step 5: Update the Pull Request with Terraform Plan Output
+    # Step 5: Update the Pull Request with Full Terraform Plan Output
     - name: Update PR with Full Terraform Plan Output
       uses: actions/github-script@v6
       id: plan-comment
@@ -102,4 +106,3 @@ jobs:
             repo: context.repo.repo,
             body: output,
           });
-
