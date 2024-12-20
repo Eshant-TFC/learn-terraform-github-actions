@@ -21,11 +21,9 @@ jobs:
       pull-requests: write
 
     steps:
-    # Step 1: Checkout code
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step 2: Upload configuration to Terraform Cloud
     - name: Upload Configuration
       uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
       id: plan-upload
@@ -34,7 +32,6 @@ jobs:
         directory: ${{ env.CONFIG_DIRECTORY }}
         speculative: true  # Run a speculative plan
 
-    # Step 3: Create Terraform Plan Run in Terraform Cloud
     - name: Create Plan Run
       uses: hashicorp/tfc-workflows-github/actions/create-run@v1.0.0
       id: plan-run
@@ -42,6 +39,7 @@ jobs:
         workspace: ${{ env.TF_WORKSPACE }}
         configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
         plan_only: true  # Only generate the plan, don't apply
+
 
     # Step 4: Get the Run ID and Plan Output from Terraform Cloud
     - name: Get Full Plan Output
@@ -51,17 +49,37 @@ jobs:
         RUN_ID=${{ fromJSON(steps.plan-run.outputs.payload).data.id }}
         
         # Fetch the plan output from Terraform Cloud's API
+
+    # Fetch Full Plan Output
+    - name: Fetch Full Terraform Plan Output
+      id: fetch-plan-output
+      run: |
+        # Fetch the Run ID from the previous step
+        RUN_ID=${{ fromJSON(steps.plan-run.outputs.payload).data.id }}
+
+        # Use curl to get the plan details from Terraform Cloud's API
+
         curl --silent --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
              --header "Content-Type: application/vnd.api+json" \
              --request GET \
              --url "https://app.terraform.io/api/v2/runs/$RUN_ID/plan" \
              --output plan_output.json
         
+
         # Parse the plan output as text
         PLAN_OUTPUT=$(cat plan_output.json | jq -r '.data.attributes.plan.text')
         echo "$PLAN_OUTPUT" > terraform_plan_output.txt
 
     # Step 5: Update the Pull Request with Full Terraform Plan Output
+
+        # Extract the plan text from the response
+        PLAN_OUTPUT=$(cat plan_output.json | jq -r '.data.attributes.plan.text')
+        
+        # Save it to a file so we can use it in the next step
+        echo "$PLAN_OUTPUT" > terraform_plan_output.txt
+
+    # Step to add comment with the full plan
+
     - name: Update PR with Full Terraform Plan Output
       uses: actions/github-script@v6
       id: plan-comment
@@ -77,13 +95,21 @@ jobs:
             repo: context.repo.repo,
             issue_number: context.issue.number,
           });
+
           
           // Find the existing bot comment
+
+          // Find the previous bot comment
+
           const botComment = comments.find(comment => {
             return comment.user.type === 'Bot' && comment.body.includes('HCP Terraform Plan Output');
           });
 
+
           // Prepare the Terraform plan output comment with the full plan text
+
+          // Prepare the full Terraform plan output comment
+
           const output = `#### HCP Terraform Plan Output
           \`\`\`
           ${planOutput}
